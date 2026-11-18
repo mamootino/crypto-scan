@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="اسکنر">
+<meta name="theme-color" content="#0e1412">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230e1412'/%3E%3Cpath d='M15 70 35 45 52 58 85 22' stroke='%2300d68f' stroke-width='9' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>اسکنر ارز دیجیتال</title>
+<style>
+:root{--bg:#0e1412;--s:#16201c;--s2:#1d2a25;--tx:#e8f0ec;--mu:#8fa59b;--up:#00d68f;--dn:#ff6b5a;--wr:#ffc857;--ln:#2a3a33}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--tx);font-family:-apple-system,"Vazirmatn","Tahoma",sans-serif;line-height:1.7}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 12px 8px;border-bottom:1px solid var(--ln)}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+h1{font-size:18px}
+#ref{background:var(--up);color:#04140d;border:0;border-radius:10px;padding:6px 14px;font:inherit;font-weight:700}
+#ref:disabled{opacity:.5}
+nav{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+nav button{background:var(--s);color:var(--mu);border:1px solid var(--ln);border-radius:10px;padding:7px 4px;font:inherit;font-size:13px}
+nav button.on{background:var(--s2);color:var(--up);border-color:var(--up)}
+main{padding:12px;max-width:640px;margin:auto}
+#st{font-size:12px;color:var(--mu);margin-bottom:10px}
+.card{background:var(--s);border:1px solid var(--ln);border-radius:14px;padding:12px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sym{font-weight:800;font-size:17px;direction:ltr}
+.nm{font-size:12px;color:var(--mu)}
+.sc{font-size:22px;font-weight:800;color:var(--up);direction:ltr}
+.sc small{font-size:11px;color:var(--mu)}
+.px{direction:ltr;font-size:13px;color:var(--mu);margin:4px 0}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.bar{height:5px;background:var(--s2);border-radius:3px;margin:6px 0}
+.bar i{display:block;height:100%;background:var(--up);border-radius:3px}
+ul{padding-inline-start:18px;font-size:13px;color:#cfdcd5}
+li.w{color:var(--wr)}
+a{color:var(--up);text-decoration:none}
+.tag{display:inline-block;background:var(--s2);border:1px solid var(--wr);color:var(--wr);border-radius:8px;font-size:11px;padding:0 7px;margin-inline-end:4px}
+.note{font-size:11px;color:var(--mu);margin-top:14px;line-height:1.8}
+.err{color:var(--dn)}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>اسکنر ۳۰۰ ارز برتر</h1><button id="ref">بروزرسانی</button></div>
+  <nav id="nav">
+    <button data-t="s" class="on">صعود ۱ تا ۴ ساعت</button>
+    <button data-t="m">حرکت بزرگ تا ۳ روز</button>
+    <button data-t="r">اصلاح تمام‌شده، ورود پول</button>
+    <button data-t="n">خبر و رویداد</button>
+  </nav>
+</header>
+<main>
+  <div id="st">برای شروع «بروزرسانی» را بزنید.</div>
+  <div id="out"></div>
+  <p class="note" id="ex"></p>
+  <p class="note">منابع رایگان: CoinGecko، Binance (کندل و خریدار/فروشنده)، Binance Futures (فاندینگ)، DexScreener (دکس)، CryptoCompare (خبر). این ابزار فقط فیلتر آماری است و توصیه مالی نیست؛ قبل از هر معامله خودتان بررسی و مدیریت ریسک کنید.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const BN="https://data-api.binance.vision/api/v3";
+const STABLE=new Set("USDT USDC DAI TUSD FDUSD USDE USDS PYUSD BUSD USDD FRAX LUSD GUSD USDP STETH WSTETH WBTC WETH WEETH CBBTC BSC-USD USD1 SUSDE".split(" "));
+let DATA=null,TAB="s";
+
+async function J(u,t=15000){const c=new AbortController(),k=setTimeout(()=>c.abort(),t);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw new Error(r.status);return await r.json()}finally{clearTimeout(k)}}
+async function pool(items,fn,n=8){const out=new Array(items.length);let i=0;await Promise.all(Array.from({length:n},async()=>{while(i<items.length){const k=i++;try{out[k]=await fn(items[k])}catch(e){out[k]=null}}}));return out}
+
+const avg=a=>a.reduce((x,y)=>x+y,0)/(a.length||1);
+function ema(c,p){const k=2/(p+1);let e=c[0];for(const v of c)e=v*k+e*(1-k);return e}
+function rsi(c,p=14){if(c.length<p+2)return 50;let g=0,l=0;for(let i=1;i<=p;i++){const d=c[i]-c[i-1];d>0?g+=d:l-=d}g/=p;l/=p;for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1];g=(g*(p-1)+(d>0?d:0))/p;l=(l*(p-1)+(d<0?-d:0))/p}return l===0?100:100-100/(1+g/l)}
+const K=r=>r.map(x=>({h:+x[2],l:+x[3],c:+x[4],v:+x[5],q:+x[7],tb:+x[10]}));
+const buy=a=>{const q=a.reduce((s,x)=>s+x.q,0);return q?a.reduce((s,x)=>s+x.tb,0)/q:0.5};
+const pct=n=>(n>0?"+":"")+n.toFixed(1)+"%";
+function fmt(p){return p>=1?p.toLocaleString("en",{maximumFractionDigits:2}):p>=0.01?p.toFixed(4):p.toPrecision(3)}
+
+function scoreCoin(c,h,f,fund,dex){
+  const R={s:{p:0,w:[]},m:{p:0,w:[]},r:{p:0,w:[]}};
+  const add=(k,pts,txt,warn)=>{R[k].p+=pts;R[k].w.push([txt,warn])};
+  const ch1=c.price_change_percentage_1h_in_currency||0,ch24=c.price_change_percentage_24h_in_currency||0,ch7=c.price_change_percentage_7d_in_currency||0;
+  if(h&&h.length>30){
+    const cl=h.map(x=>x.c),last=h[h.length-1],pv=h.slice(-25,-1);
+    const vr=last.v/(avg(pv.map(x=>x.v))||1),r1=rsi(cl),b3=buy(h.slice(-3)),e20=ema(cl.slice(-40),20);
+    if(vr>1.5)add("s",25,`حجم ساعت اخیر ${vr.toFixed(1)} برابر میانگین`);
+    if(r1>45&&r1<68)add("s",20,`RSI یک‌ساعته ${r1.toFixed(0)} (سالم، نه اشباع)`);else if(r1>=75)add("s",-15,"RSI یک‌ساعته اشباع خرید",1);
+    if(last.c>e20)add("s",15,"بالای میانگین ۲۰ یک‌ساعته");
+    if(b3>0.53)add("s",20,`سهم خریدار ۳ ساعت اخیر ${(b3*100).toFixed(0)}٪`);
+    if(ch1>0&&ch1<4&&ch24<15)add("s",10,"هنوز پامپ بزرگ نکرده");
+    if(ch24>20)add("s",-15,"قبلاً بیش از ۲۰٪ رشد کرده",1);
+  }
+  if(f&&f.length>45){
+    const cl=f.map(x=>x.c),last=f[f.length-1],r4=rsi(cl),e20=ema(cl.slice(-40),20),e50=ema(cl,50);
+    const atr=a=>avg(a.map(x=>(x.h-x.l)/x.c)),sq=atr(f.slice(-8))/(atr(f.slice(-40,-8))||1);
+    const v6=avg(f.slice(-6).map(x=>x.v)),v30=avg(f.slice(-36,-6).map(x=>x.v)),hi=Math.max(...f.slice(-42).map(x=>x.h));
+    if(sq<0.8)add("m",25,"نوسان فشرده شده (آماده شکست)");
+    if(r4>50&&r4<66)add("m",15,`RSI چهارساعته ${r4.toFixed(0)}`);
+    if(last.c>e20&&e20>e50)add("m",20,"روند صعودی: قیمت > EMA20 > EMA50");
+    if(v6>v30*1.2)add("m",15,"حجم چهارساعته در حال افزایش");
+    if((hi-last.c)/hi<0.05)add("m",15,"نزدیک سقف ۷ روزه");
+    if(ch7>0&&ch7<25)add("m",10,"هفتگی مثبت و هنوز زود نشده");
+    if(fund!=null&&fund>0.0005)add("m",-15,`فاندینگ بالا (${(fund*100).toFixed(3)}٪) ریسک لانگ‌های شلوغ`,1);
+    // recovery
+    const hs=f.slice(-42),hiI=hs.findIndex(x=>x.h===Math.max(...hs.map(y=>y.h))),hiV=hs[hiI].h;
+    const lowBefore=Math.min(...hs.slice(0,hiI+1).map(x=>x.l)),rise=(hiV/lowBefore-1)*100,drop=(hiV-last.c)/hiV*100;
+    const bn=buy(f.slice(-4)),bo=buy(f.slice(-10,-4)),bounce=(last.c/Math.min(...f.slice(-12).map(x=>x.l))-1)*100;
+    const rPrev=rsi(cl.slice(0,-3));
+    if(rise>=15&&hiI<hs.length-4)add("r",20,`قبلاً ${rise.toFixed(0)}٪ صعود کرده`);
+    if(drop>=8&&drop<=30)add("r",20,`${drop.toFixed(0)}٪ از سقف ۷ روزه اصلاح شده`);
+    if(bn>0.5&&bn>bo)add("r",25,`فشار فروش کم شده؛ سهم خریدار ${(bo*100).toFixed(0)}٪ ← ${(bn*100).toFixed(0)}٪`);
+    if(r4>rPrev&&r4>40)add("r",15,"RSI از کف برگشته");
+    if(bounce>2)add("r",10,`${bounce.toFixed(1)}٪ از کف اخیر بالاتر`);
+    if(drop>30)add("r",-20,"ریزش بیش از ۳۰٪ (ساختار خراب)",1);
+  }
+  if(dex){const t=dex.h1b/(dex.h1b+dex.h1s||1);if(t>0.55){add("s",15,`دکس: ${(t*100).toFixed(0)}٪ تراکنش ساعت اخیر خرید`);add("r",10,"دکس: خرید غالب")}}
+  if(fund!=null&&fund>0.001)add("s",-10,"فاندینگ بسیار بالا",1);
+  return R;
+}
+
+async function dexInfo(sym){
+  const d=await J("https://api.dexscreener.com/latest/dex/search?q="+encodeURIComponent(sym),10000);
+  const p=(d.pairs||[]).filter(x=>x.baseToken&&x.baseToken.symbol.toUpperCase()===sym&&x.txns&&x.txns.h1).sort((a,b)=>(b.liquidity?.usd||0)-(a.liquidity?.usd||0))[0];
+  return p?{h1b:p.txns.h1.buys,h1s:p.txns.h1.sells}:null;
+}
+
+async function load(){
+  const b=$("ref");b.disabled=true;const st=m=>$("st").textContent=m;$("out").innerHTML="";
+  try{
+    st("دریافت ۳۰۰ ارز برتر از CoinGecko...");
+    const cg=u=>`https://api.coingecko.com/api/v3/${u}`;
+    const [p1,p2]=await Promise.all([1,2].map(n=>J(cg(`coins/markets?vs_currency=usd&order=market_cap_desc&per_page=150&page=${n}&price_change_percentage=1h,24h,7d`))));
+    const coins=[...p1,...p2].filter(c=>!STABLE.has(c.symbol.toUpperCase())&&c.current_price);
+    st("دریافت جفت‌ارزهای بایننس، فاندینگ و صرافی‌ها...");
+    const [tick,fut,exch]=await Promise.all([J(BN+"/ticker/price").catch(()=>[]),J("https://fapi.binance.com/fapi/v1/premiumIndex").catch(()=>[]),J(cg("exchanges?per_page=10")).catch(()=>[])]);
+    const pairs=new Set(tick.map(t=>t.symbol)),fm={};fut.forEach(x=>fm[x.symbol]=+x.lastFundingRate);
+    $("ex").textContent=exch.length?"۱۰ صرافی برتر (CoinGecko): "+exch.map(e=>e.name).join("، "):"";
+    const withB=coins.filter(c=>pairs.has(c.symbol.toUpperCase()+"USDT"));
+    const pre=c=>Math.abs(c.price_change_percentage_1h_in_currency||0)*2+Math.abs(c.price_change_percentage_24h_in_currency||0)+(c.total_volume/(c.market_cap||1))*50;
+    const cand=withB.sort((a,b)=>pre(b)-pre(a)).slice(0,70);
+    const rest=coins.filter(c=>!pairs.has(c.symbol.toUpperCase()+"USDT")).sort((a,b)=>pre(b)-pre(a)).slice(0,10);
+    let done=0;st("تحلیل کندل‌ها (0/"+cand.length+")...");
+    const res=await pool(cand,async c=>{
+      const S=c.symbol.toUpperCase()+"USDT";
+      const [h,f]=await Promise.all([J(`${BN}/klines?symbol=${S}&interval=1h&limit=48`),J(`${BN}/klines?symbol=${S}&interval=4h&limit=60`)]);
+      st(`تحلیل کندل‌ها (${++done}/${cand.length})...`);
+      const dx=await dexInfo(c.symbol.toUpperCase()).catch(()=>null);
+      return{c,R:scoreCoin(c,K(h),K(f),fm[S],dx)};
+    },8);
+    const resR=await pool(rest,async c=>({c,R:scoreCoin(c,null,null,null,await dexInfo(c.symbol.toUpperCase()).catch(()=>null))}),4);
+    const all=[...res,...resR].filter(Boolean);
+    st("دریافت اخبار...");
+    let news=[];
+    try{news=(await J("https://min-api.cryptocompare.com/data/v2/news/?lang=EN")).Data||[]}catch(e){}
+    DATA={all,news,coins,time:new Date()};
+    render();
+  }catch(e){$("st").innerHTML='<span class="err">خطا در دریافت داده ('+esc(e.message)+'). اینترنت را بررسی و دوباره بزنید (سقف رایگان CoinGecko ممکن است پر شده باشد؛ یک دقیقه صبر کنید).</span>'}
+  b.disabled=false;
+}
+
+const EV=/unlock|vest|listing|list on|mainnet|upgrade|hard ?fork|airdrop|burn|halving|launch|testnet|delist|hack|exploit|etf|sec |partnership|migration|buyback/i;
+const EVF={unlock:"آزادسازی توکن",vest:"آزادسازی توکن",listing:"لیست‌شدن","list on":"لیست‌شدن",mainnet:"مین‌نت",upgrade:"آپگرید","hard fork":"هارد فورک",hardfork:"هارد فورک",airdrop:"ایردراپ",burn:"سوزاندن",halving:"هالوینگ",launch:"لانچ",testnet:"تست‌نت",delist:"دیلیست",hack:"هک",exploit:"هک",etf:"ETF",partnership:"همکاری",migration:"مهاجرت",buyback:"بازخرید"};
+function ago(t){const m=(Date.now()/1000-t)/60;return m<60?Math.round(m)+" دقیقه پیش":m<1440?Math.round(m/60)+" ساعت پیش":Math.round(m/1440)+" روز پیش"}
+
+function render(){
+  if(!DATA)return;const out=$("out");
+  $("st").textContent="آخرین بروزرسانی: "+DATA.time.toLocaleTimeString("fa-IR");
+  if(TAB==="n"){
+    const map=new Map(DATA.coins.map(c=>[c.symbol.toUpperCase(),c])),g={};
+    DATA.news.forEach(n=>{(n.categories||"").split("|").forEach(s=>{s=s.trim().toUpperCase();if(map.has(s)&&!STABLE.has(s)&&s!=="BTC"&&s!=="ETH"||map.has(s)&&(s==="BTC"||s==="ETH")){(g[s]=g[s]||[]).push(n)}})});
+    const items=Object.entries(g).map(([s,a])=>{const ev=a.filter(n=>EV.test(n.title));return{s,a,ev,sc:a.length+ev.length*3}}).sort((x,y)=>y.sc-x.sc).slice(0,5);
+    out.innerHTML=items.length?items.map(it=>{const c=map.get(it.s),n=(it.ev[0]||it.a[0]);const m=n.title.match(EV),tg=m?EVF[m[0].toLowerCase().trim()]||"رویداد":null;
+      return`<div class="card"><div class="row"><div><div class="sym">${esc(it.s)}</div><div class="nm">${esc(c.name)}</div></div><div class="px">$${fmt(c.current_price)} <span class="${c.price_change_percentage_24h>=0?"up":"dn"}">${pct(c.price_change_percentage_24h||0)}</span></div></div>
+      <p style="margin-top:6px;font-size:13px">${tg?`<span class="tag">${tg}</span>`:""}<a href="${esc(n.url)}" target="_blank" rel="noopener" style="direction:ltr;display:block">${esc(n.title)}</a></p><div class="nm">${esc(n.source_info?.name||n.source)} · ${ago(n.published_on)} · ${it.a.length} خبر</div></div>`}).join("")
+      :'<div class="card">خبر مرتبط با ۳۰۰ ارز برتر پیدا نشد. بعداً دوباره بزنید.</div>';
+    out.innerHTML+='<p class="note">آزادسازی توکن و لیست‌شدن از روی تیتر خبرها تشخیص داده می‌شود؛ تقویم دقیق آنلاک‌ها منبع رایگان بدون کلید ندارد.</p>';
+    return;
+  }
+  const top=DATA.all.map(x=>({c:x.c,p:x.R[TAB].p,w:x.R[TAB].w})).filter(x=>x.w.length).sort((a,b)=>b.p-a.p).slice(0,5);
+  out.innerHTML=top.length?top.map(x=>{const c=x.c,s=Math.max(0,Math.min(100,x.p)),c1=c.price_change_percentage_1h_in_currency||0,c24=c.price_change_percentage_24h_in_currency||0,c7=c.price_change_percentage_7d_in_currency||0;
+    return`<div class="card"><div class="row"><div><div class="sym">${esc(c.symbol.toUpperCase())}</div><div class="nm">${esc(c.name)} · رتبه ${c.market_cap_rank}</div></div><div class="sc">${s}<small>/100</small></div></div>
+    <div class="bar"><i style="width:${s}%"></i></div>
+    <div class="px">$${fmt(c.current_price)} · 1h <span class="${c1>=0?"up":"dn"}">${pct(c1)}</span> · 24h <span class="${c24>=0?"up":"dn"}">${pct(c24)}</span> · 7d <span class="${c7>=0?"up":"dn"}">${pct(c7)}</span></div>
+    <ul>${x.w.map(([t,w])=>`<li class="${w?"w":""}">${esc(t)}</li>`).join("")}</ul>
+    <div class="nm" style="margin-top:4px"><a href="https://www.coingecko.com/en/coins/${esc(c.id)}" target="_blank" rel="noopener">CoinGecko</a> · <a href="https://dexscreener.com/search?q=${esc(c.symbol)}" target="_blank" rel="noopener">DexScreener</a> · <a href="https://www.coinglass.com/currencies/${esc(c.symbol.toUpperCase())}" target="_blank" rel="noopener">Coinglass</a></div></div>`}).join(""):'<div class="card">موردی پیدا نشد.</div>';
+}
+$("nav").onclick=e=>{const t=e.target.dataset.t;if(!t)return;TAB=t;[...$("nav").children].forEach(b=>b.classList.toggle("on",b===e.target));render()};
+$("ref").onclick=load;
+</script>
+</body>
+</html>
